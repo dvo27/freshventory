@@ -1,64 +1,187 @@
-import React from "react"
-import { View, StyleSheet, ScrollView, Text, Image, TouchableOpacity } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  Text,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  Modal,
+  FlatList,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as SecureStore from "expo-secure-store";
 
-// Mock data (replace with actual data fetching logic)
-const user = {
-  name: "John Doe",
-  email: "john.doe@example.com",
-  phone: "+1 (555) 123-4567",
-  avatar: "https://i.pravatar.cc/150?img=68",
-}
-
-const savedRecipes = [
-  { id: "1", name: "Vegetable Stir Fry" },
-  { id: "2", name: "Chicken Parmesan" },
-  { id: "3", name: "Quinoa Salad" },
-]
-
-const dietaryRestrictions = ["Gluten-free", "Lactose intolerant", "No peanuts"]
+const dietaryRestrictions = [
+  "None",
+  "Vegetarian",
+  "Vegan",
+  "Gluten-free",
+  "Lactose-free",
+  "Nut allergy",
+  "Shellfish allergy",
+];
 
 export default function ProfileScreen() {
+  const [user, setUser] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    avatar?: string;
+    dietaryRestrictions: string[];
+  } | null>(null);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [selectedRestrictions, setSelectedRestrictions] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      const storedUserData = await SecureStore.getItemAsync("userData");
+      if (storedUserData) {
+        const parsedUserData = JSON.parse(storedUserData);
+        setUser(parsedUserData);
+        setSelectedRestrictions(parsedUserData.dietaryRestrictions || []);
+      }
+      setIsLoading(false);
+    };
+
+    loadUserData();
+  }, []);
+
+  const saveDietaryRestrictions = async () => {
+    if (user) {
+      const updatedUser = {
+        ...user,
+        dietaryRestrictions: selectedRestrictions,
+      };
+
+      await SecureStore.setItemAsync("userData", JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      setIsEditModalVisible(false);
+    }
+  };
+
+  const toggleRestriction = (restriction: string) => {
+    setSelectedRestrictions((prev) =>
+      prev.includes(restriction)
+        ? prev.filter((item) => item !== restriction)
+        : [...prev, restriction]
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.loaderContainer}>
+        <Text>No user data found.</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Image source={{ uri: user.avatar }} style={styles.avatar} />
+          <Image
+            source={{
+              uri: user.avatar || "https://a.espncdn.com/i/headshots/nba/players/full/1966.png",
+            }}
+            style={styles.avatar}
+          />
           <Text style={styles.welcomeText}>Welcome back, {user.name}!</Text>
         </View>
 
+        {/* Personal Information Section */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Personal Information</Text>
           <Text style={styles.cardContent}>Email: {user.email}</Text>
           <Text style={styles.cardContent}>Phone: {user.phone}</Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Saved Recipes</Text>
-          {savedRecipes.map((recipe) => (
-            <Text key={recipe.id} style={styles.cardContent}>
-              • {recipe.name}
-            </Text>
-          ))}
-          <TouchableOpacity style={styles.button}>
-            <Text style={styles.buttonText}>View All Recipes</Text>
-          </TouchableOpacity>
-        </View>
-
+        {/* Dietary Restrictions Section */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Dietary Restrictions</Text>
-          {dietaryRestrictions.map((restriction, index) => (
-            <Text key={index} style={styles.cardContent}>
-              • {restriction}
-            </Text>
-          ))}
-          <TouchableOpacity style={styles.button}>
+          {user.dietaryRestrictions.length > 0 ? (
+            user.dietaryRestrictions.map((restriction, index) => (
+              <Text key={index} style={styles.cardContent}>
+                • {restriction}
+              </Text>
+            ))
+          ) : (
+            <Text style={styles.cardContent}>No dietary restrictions.</Text>
+          )}
+
+          {/* Edit Restrictions Button */}
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => setIsEditModalVisible(true)}
+          >
             <Text style={styles.buttonText}>Edit Restrictions</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Edit Restrictions Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isEditModalVisible}
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Dietary Restrictions</Text>
+            <FlatList
+              data={dietaryRestrictions}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.restrictionItem,
+                    selectedRestrictions.includes(item) && styles.selectedRestriction,
+                  ]}
+                  onPress={() => toggleRestriction(item)}
+                >
+                  <Text
+                    style={[
+                      styles.restrictionText,
+                      selectedRestrictions.includes(item) && styles.selectedRestrictionText,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIsEditModalVisible(false)}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={saveDietaryRestrictions}
+              >
+                <Text style={styles.buttonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -116,5 +239,62 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-})
-
+  loaderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  modalContent: {
+    backgroundColor: "white",
+    borderRadius: 8,
+    padding: 20,
+    width: "80%",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 16,
+  },
+  restrictionItem: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: "#f0f0f0",
+  },
+  selectedRestriction: {
+    backgroundColor: "#007AFF",
+  },
+  restrictionText: {
+    fontSize: 16,
+  },
+  selectedRestrictionText: {
+    color: "white",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginTop: 16,
+  },
+  cancelButton: {
+    backgroundColor: "#ff3b30",
+    padding: 10,
+    borderRadius: 4,
+    width: "45%",
+    alignItems: "center",
+  },
+  saveButton: {
+    backgroundColor: "#34c759",
+    padding: 10,
+    borderRadius: 4,
+    width: "45%",
+    alignItems: "center",
+  },
+});

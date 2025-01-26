@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,128 +9,151 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-} from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import { Ionicons } from "@expo/vector-icons"
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { collection, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
+import { db } from "../../firebase.js";
+import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
 
 interface InventoryItem {
-  id: string
-  name: string
-  quantity: number
-  unit: string
+  id: string;
+  name: string;
 }
 
-const mockInventory: InventoryItem[] = [
-  { id: "1", name: "Milk", quantity: 1, unit: "gallon" },
-  { id: "2", name: "Eggs", quantity: 12, unit: "pcs" },
-  { id: "3", name: "Bread", quantity: 1, unit: "loaf" },
-  { id: "4", name: "Cheese", quantity: 200, unit: "g" },
-  { id: "5", name: "Apples", quantity: 6, unit: "pcs" },
-]
-
 export default function InventoryScreen() {
-  const [inventory, setInventory] = useState<InventoryItem[]>(mockInventory)
-  const [isAddModalVisible, setIsAddModalVisible] = useState(false)
-  const [newItemName, setNewItemName] = useState("")
-  const [newItemQuantity, setNewItemQuantity] = useState("")
-  const [newItemUnit, setNewItemUnit] = useState("")
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [newItemName, setNewItemName] = useState("");
+
+  // Fetch data from Firestore
+  useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "ingredients"));
+        const items: InventoryItem[] = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name,
+        }));
+        setInventory(items);
+      } catch (error) {
+        console.error("Error fetching inventory:", error);
+      }
+    };
+
+    fetchInventory();
+  }, []);
+
+  // Add item to Firestore database
+  const addItem = async () => {
+    if (newItemName) {
+      try {
+        const docRef = await addDoc(collection(db, "ingredients"), {
+          name: newItemName,
+        });
+
+        const newItem: InventoryItem = {
+          id: docRef.id,
+          name: newItemName,
+        };
+        setInventory((prevInventory) => [...prevInventory, newItem]);
+
+        setIsAddModalVisible(false);
+        setNewItemName("");
+      } catch (error) {
+        console.error("Error adding item to Firestore:", error);
+      }
+    } else {
+      console.log("Item name is required.");
+    }
+  };
+
+  // Delete item from Firestore and update state
+  const deleteItem = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "ingredients", id));
+      setInventory((prevInventory) => prevInventory.filter((item) => item.id !== id));
+      console.log("Item deleted successfully.");
+    } catch (error) {
+      console.error("Error deleting item:", error);
+    }
+  };
+
+  const renderRightActions = (id: string) => {
+    return (
+      <View style={styles.deleteButton}>
+        <TouchableOpacity onPress={() => deleteItem(id)}>
+          <Text style={styles.deleteButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const renderItem = ({ item }: { item: InventoryItem }) => (
-    <View style={styles.itemRow}>
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemUnit}>{item.unit}</Text>
+    <Swipeable renderRightActions={() => renderRightActions(item.id)}>
+      <View style={styles.itemRow}>
+        <View style={styles.itemInfo}>
+          <Text style={styles.itemName}>{item.name}</Text>
+        </View>
       </View>
-      <View style={styles.quantityContainer}>
-        <TouchableOpacity onPress={() => updateQuantity(item.id, -1)}>
-          <Ionicons name="remove-circle-outline" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <Text style={styles.quantityText}>{item.quantity}</Text>
-        <TouchableOpacity onPress={() => updateQuantity(item.id, 1)}>
-          <Ionicons name="add-circle-outline" size={24} color="#007AFF" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  )
-
-  const updateQuantity = (id: string, change: number) => {
-    setInventory((prevInventory) =>
-      prevInventory.map((item) => (item.id === id ? { ...item, quantity: Math.max(0, item.quantity + change) } : item)),
-    )
-  }
-
-  const addItem = () => {
-    if (newItemName && newItemQuantity && newItemUnit) {
-      const newItem: InventoryItem = {
-        id: Date.now().toString(),
-        name: newItemName,
-        quantity: Number.parseInt(newItemQuantity, 10),
-        unit: newItemUnit,
-      }
-      setInventory((prevInventory) => [...prevInventory, newItem])
-      setIsAddModalVisible(false)
-      setNewItemName("")
-      setNewItemQuantity("")
-      setNewItemUnit("")
-    }
-  }
+    </Swipeable>
+  );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Inventory</Text>
-      
-      {/* Invetory List */}
-      <FlatList
-        data={inventory}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-      />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Inventory</Text>
 
-      {/* Add Item Button */}
-      <TouchableOpacity style={styles.addButton} onPress={() => setIsAddModalVisible(true)}>
-        <Ionicons name="add" size={24} color="white" />
-        <Text style={styles.addButtonText}>Add Item</Text>
-      </TouchableOpacity>
+        {/* Inventory List */}
+        <FlatList
+          data={inventory}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+        />
 
-      {/* Add Item Screen */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isAddModalVisible}
-        onRequestClose={() => setIsAddModalVisible(false)}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Item</Text>
-            <TextInput style={styles.input} placeholder="Item Name" value={newItemName} onChangeText={setNewItemName} />
-            <TextInput
-              style={styles.input}
-              placeholder="Quantity"
-              value={newItemQuantity}
-              onChangeText={setNewItemQuantity}
-              keyboardType="numeric"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Unit (e.g., pcs, g, ml)"
-              value={newItemUnit}
-              onChangeText={setNewItemUnit}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setIsAddModalVisible(false)}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={addItem}>
-                <Text style={styles.buttonText}>Save</Text>
-              </TouchableOpacity>
+        {/* Add Item Button */}
+        <TouchableOpacity style={styles.addButton} onPress={() => setIsAddModalVisible(true)}>
+          <Ionicons name="add" size={24} color="white" />
+          <Text style={styles.addButtonText}>Add Item</Text>
+        </TouchableOpacity>
+
+        {/* Add Item Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isAddModalVisible}
+          onRequestClose={() => setIsAddModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContainer}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Add New Item</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Item Name"
+                value={newItemName}
+                onChangeText={setNewItemName}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setIsAddModalVisible(false)}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveButton} onPress={addItem}>
+                  <Text style={styles.buttonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-      
-    </SafeAreaView>
-  )
+          </KeyboardAvoidingView>
+        </Modal>
+      </SafeAreaView>
+    </GestureHandlerRootView>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -167,19 +190,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  itemUnit: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
-  },
-  quantityContainer: {
-    flexDirection: "row",
+  deleteButton: {
+    backgroundColor: "#ff3b30",
+    justifyContent: "center",
     alignItems: "center",
+    width: 80,
+    borderRadius: 8,
+    marginVertical: 12,
+    marginHorizontal: 8,
   },
-  quantityText: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginHorizontal: 12,
+  deleteButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
   },
   addButton: {
     flexDirection: "row",
@@ -248,5 +271,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-})
-
+});
