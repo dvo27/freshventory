@@ -11,6 +11,8 @@ import {
   FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getDoc, doc, updateDoc } from "firebase/firestore";
+import { db } from "../../firebase";
 import * as SecureStore from "expo-secure-store";
 
 const dietaryRestrictions = [
@@ -25,10 +27,10 @@ const dietaryRestrictions = [
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<{
+    id: string;
     name: string;
     email: string;
     phone: string;
-    avatar?: string;
     dietaryRestrictions: string[];
   } | null>(null);
 
@@ -36,30 +38,59 @@ export default function ProfileScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [selectedRestrictions, setSelectedRestrictions] = useState<string[]>([]);
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      const storedUserData = await SecureStore.getItemAsync("userData");
-      if (storedUserData) {
-        const parsedUserData = JSON.parse(storedUserData);
-        setUser(parsedUserData);
-        setSelectedRestrictions(parsedUserData.dietaryRestrictions || []);
+  // Fetch user data from Firestore
+  const fetchUserData = async () => {
+    try {
+      const email = await SecureStore.getItemAsync("userEmail");
+      if (email) {
+        const userDoc = await getDoc(doc(db, "users", email));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setUser({
+            id: email,
+            name: userData.name,
+            email: userData.email,
+            phone: userData.phone_num,
+            dietaryRestrictions: userData.dietary_restr ? userData.dietary_restr.split(", ") : [],
+          });
+          setSelectedRestrictions(userData.dietary_restr ? userData.dietary_restr.split(", ") : []);
+        } else {
+          console.error("User not found in the database.");
+        }
+      } else {
+        console.error("No email found in SecureStore.");
       }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    } finally {
       setIsLoading(false);
-    };
+    }
+  };
 
-    loadUserData();
+  useEffect(() => {
+    fetchUserData();
   }, []);
 
+  // Save updated dietary restrictions to Firestore
   const saveDietaryRestrictions = async () => {
     if (user) {
-      const updatedUser = {
-        ...user,
-        dietaryRestrictions: selectedRestrictions,
-      };
+      try {
+        const updatedUser = {
+          ...user,
+          dietaryRestrictions: selectedRestrictions,
+        };
 
-      await SecureStore.setItemAsync("userData", JSON.stringify(updatedUser));
-      setUser(updatedUser);
-      setIsEditModalVisible(false);
+        // Update the user data in Firestore
+        await updateDoc(doc(db, "users", user.id), {
+          dietary_restr: selectedRestrictions.join(", "),
+        });
+
+        setUser(updatedUser);
+        setIsEditModalVisible(false);
+        console.log("Dietary restrictions updated successfully!");
+      } catch (error) {
+        console.error("Error updating dietary restrictions:", error);
+      }
     }
   };
 
@@ -93,7 +124,7 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <Image
             source={{
-              uri: user.avatar || "https://a.espncdn.com/i/headshots/nba/players/full/1966.png",
+              uri: "https://a.espncdn.com/i/headshots/nba/players/full/1966.png",
             }}
             style={styles.avatar}
           />

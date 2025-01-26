@@ -1,8 +1,17 @@
-import React, { useState } from "react"
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import * as SecureStore from "expo-secure-store"
-import { useRouter } from "expo-router"
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { collection, setDoc, doc } from "firebase/firestore";
+import { db } from "../firebase.js";
+import * as SecureStore from "expo-secure-store";
 
 const dietaryRestrictions = [
   "None",
@@ -12,39 +21,47 @@ const dietaryRestrictions = [
   "Lactose-free",
   "Nut allergy",
   "Shellfish allergy",
-]
+];
 
 export default function OnboardingScreen() {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [selectedRestrictions, setSelectedRestrictions] = useState<string[]>([])
-  const router = useRouter()
-
-  const completeOnboarding = async () => {
-    await SecureStore.setItemAsync("hasOnboarded", "true");
-    router.replace("/"); // Redirect to the main app
-  };
-
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [selectedRestrictions, setSelectedRestrictions] = useState<string[]>([]);
+  const router = useRouter();
 
   const toggleRestriction = (restriction: string) => {
     setSelectedRestrictions((prev) =>
-      prev.includes(restriction) ? prev.filter((r) => r !== restriction) : [...prev, restriction],
-    )
-  }
+      prev.includes(restriction)
+        ? prev.filter((r) => r !== restriction)
+        : [...prev, restriction]
+    );
+  };
 
   const handleSubmit = async () => {
-    // IMPLEMENT ACTUAL SECURESTORE LOGIC TO SAVE TO DB
-    // Save user data
-    const userData = { name, email, phone, dietaryRestrictions: selectedRestrictions }
-    await SecureStore.setItemAsync("userData", JSON.stringify(userData))
+    try {
+      // Create a new user profile in Firestore
+      const userData = {
+        name,
+        email,
+        phone_num: phone,
+        dietary_restr: selectedRestrictions.join(", "),
+      };
 
-    // Set onboarding as completed
-    await SecureStore.setItemAsync("onboardingCompleted", "true")
+      // Save to the Firestore "users" collection with email as document ID
+      await setDoc(doc(db, "users", email), userData);
 
-    // Navigate to the main app
-    router.replace("/(tabs)/scan")
-  }
+      // Save the email to SecureStore for later use
+      await SecureStore.setItemAsync("userEmail", email);
+
+      console.log("User successfully added!");
+
+      // Navigate to the main app
+      router.replace("/(tabs)/scan");
+    } catch (error) {
+      console.error("Error creating user profile:", error);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -54,7 +71,12 @@ export default function OnboardingScreen() {
 
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Name</Text>
-          <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Enter your name" />
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="Enter your name"
+          />
         </View>
 
         <View style={styles.inputContainer}>
@@ -87,14 +109,16 @@ export default function OnboardingScreen() {
                 key={restriction}
                 style={[
                   styles.restrictionButton,
-                  selectedRestrictions.includes(restriction) && styles.selectedRestriction,
+                  selectedRestrictions.includes(restriction) &&
+                    styles.selectedRestriction,
                 ]}
                 onPress={() => toggleRestriction(restriction)}
               >
                 <Text
                   style={[
                     styles.restrictionText,
-                    selectedRestrictions.includes(restriction) && styles.selectedRestrictionText,
+                    selectedRestrictions.includes(restriction) &&
+                      styles.selectedRestrictionText,
                   ]}
                 >
                   {restriction}
@@ -109,7 +133,7 @@ export default function OnboardingScreen() {
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -180,5 +204,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
-})
-
+});
