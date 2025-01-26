@@ -7,12 +7,16 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { setDoc, doc } from "firebase/firestore";
 import { db } from "../firebase.js";
 import * as SecureStore from "expo-secure-store";
+
+// Import the logo
+import logo from "../assets/Frame 4.png";
 
 const dietaryRestrictions = [
   "None",
@@ -98,7 +102,10 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Welcome to FreshVentory</Text>
+        {/* Logo */}
+        <Image source={logo} style={styles.logo} resizeMode="contain" />
+
+        {/* Subtitle */}
         <Text style={styles.subtitle}>Let's get to know you</Text>
 
         {/* Name Input */}
@@ -200,11 +207,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
+    alignItems: "center",
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
+  logo: {
+    width: 300,
+    height: 250,
     marginBottom: 10,
   },
   subtitle: {
@@ -215,6 +222,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 20,
+    width: "100%",
   },
   label: {
     fontSize: 16,
@@ -227,9 +235,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 5,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#ccc",
   },
   inputError: {
-    borderWidth: 1,
     borderColor: "red",
   },
   errorText: {
@@ -264,6 +273,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     alignItems: "center",
     marginTop: 20,
+    width: "100%",
   },
   submitButtonText: {
     color: "white",
@@ -276,10 +286,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     alignItems: "center",
     marginTop: 20,
+    width: "100%",
   },
   loginButtonText: {
     color: "white",
     fontSize: 16,
     fontWeight: "bold",
   },
-});
+})
