@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,77 +9,86 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-} from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import { Ionicons } from "@expo/vector-icons"
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { collection, getDocs, addDoc } from "firebase/firestore";
+import { db } from "../../firebase.js";
+
 
 interface InventoryItem {
-  id: string
-  name: string
-  quantity: number
-  unit: string
+  id: string;
+  name: string;
 }
 
-const mockInventory: InventoryItem[] = [
-  { id: "1", name: "Milk", quantity: 1, unit: "gallon" },
-  { id: "2", name: "Eggs", quantity: 12, unit: "pcs" },
-  { id: "3", name: "Bread", quantity: 1, unit: "loaf" },
-  { id: "4", name: "Cheese", quantity: 200, unit: "g" },
-  { id: "5", name: "Apples", quantity: 6, unit: "pcs" },
-]
-
 export default function InventoryScreen() {
-  const [inventory, setInventory] = useState<InventoryItem[]>(mockInventory)
-  const [isAddModalVisible, setIsAddModalVisible] = useState(false)
-  const [newItemName, setNewItemName] = useState("")
-  const [newItemQuantity, setNewItemQuantity] = useState("")
-  const [newItemUnit, setNewItemUnit] = useState("")
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemQuantity, setNewItemQuantity] = useState("");
+  const [newItemUnit, setNewItemUnit] = useState("");
+
+  // Fetch data from Firestore
+  useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "ingredients"));
+        const items: InventoryItem[] = querySnapshot.docs.map((doc) => ({
+          id: doc.id, // Document ID as unique identifier
+          name: doc.data().name, // Fetch the `name` field
+        }));
+        setInventory(items); // Update state with fetched items
+      } catch (error) {
+        console.error("Error fetching inventory:", error);
+      }
+    };
+
+    fetchInventory();
+  }, []);
 
   const renderItem = ({ item }: { item: InventoryItem }) => (
     <View style={styles.itemRow}>
       <View style={styles.itemInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemUnit}>{item.unit}</Text>
-      </View>
-      <View style={styles.quantityContainer}>
-        <TouchableOpacity onPress={() => updateQuantity(item.id, -1)}>
-          <Ionicons name="remove-circle-outline" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <Text style={styles.quantityText}>{item.quantity}</Text>
-        <TouchableOpacity onPress={() => updateQuantity(item.id, 1)}>
-          <Ionicons name="add-circle-outline" size={24} color="#007AFF" />
-        </TouchableOpacity>
       </View>
     </View>
-  )
+  );
 
-  const updateQuantity = (id: string, change: number) => {
-    setInventory((prevInventory) =>
-      prevInventory.map((item) => (item.id === id ? { ...item, quantity: Math.max(0, item.quantity + change) } : item)),
-    )
-  }
 
-  const addItem = () => {
-    if (newItemName && newItemQuantity && newItemUnit) {
-      const newItem: InventoryItem = {
-        id: Date.now().toString(),
-        name: newItemName,
-        quantity: Number.parseInt(newItemQuantity, 10),
-        unit: newItemUnit,
+  // Add item to Firestore database
+  const addItem = async () => {
+    if (newItemName) {
+      try {
+        // Add the new item to Firestore
+        const docRef = await addDoc(collection(db, "ingredients"), {
+          name: newItemName, // Only store the name in Firestore
+        });
+  
+        // Add the new item to the local state with a temporary ID
+        const newItem: InventoryItem = {
+          id: docRef.id, // Use Firestore document ID
+          name: newItemName,
+        };
+        setInventory((prevInventory) => [...prevInventory, newItem]);
+  
+        // Reset the modal and input field
+        setIsAddModalVisible(false);
+        setNewItemName("");
+  
+        console.log("Item successfully added to Firestore!");
+      } catch (error) {
+        console.error("Error adding item to Firestore:", error);
       }
-      setInventory((prevInventory) => [...prevInventory, newItem])
-      setIsAddModalVisible(false)
-      setNewItemName("")
-      setNewItemQuantity("")
-      setNewItemUnit("")
+    } else {
+      console.log("Item name is required.");
     }
-  }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Inventory</Text>
-      
-      {/* Invetory List */}
+
+      {/* Inventory List */}
       <FlatList
         data={inventory}
         renderItem={renderItem}
@@ -100,25 +109,23 @@ export default function InventoryScreen() {
         visible={isAddModalVisible}
         onRequestClose={() => setIsAddModalVisible(false)}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalContainer}
+        >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add New Item</Text>
-            <TextInput style={styles.input} placeholder="Item Name" value={newItemName} onChangeText={setNewItemName} />
             <TextInput
               style={styles.input}
-              placeholder="Quantity"
-              value={newItemQuantity}
-              onChangeText={setNewItemQuantity}
-              keyboardType="numeric"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Unit (e.g., pcs, g, ml)"
-              value={newItemUnit}
-              onChangeText={setNewItemUnit}
+              placeholder="Item Name"
+              value={newItemName}
+              onChangeText={setNewItemName}
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setIsAddModalVisible(false)}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIsAddModalVisible(false)}
+              >
                 <Text style={styles.buttonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveButton} onPress={addItem}>
@@ -128,9 +135,8 @@ export default function InventoryScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -248,5 +254,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-})
+});
 

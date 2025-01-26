@@ -1,29 +1,57 @@
-import React from "react"
-import { View, StyleSheet, ScrollView, Text, Image, TouchableOpacity } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-
-// Mock data (replace with actual data fetching logic)
-const user = {
-  name: "John Doe",
-  email: "john.doe@example.com",
-  phone: "+1 (555) 123-4567",
-  avatar: "https://i.pravatar.cc/150?img=68",
-}
-
-const savedRecipes = [
-  { id: "1", name: "Vegetable Stir Fry" },
-  { id: "2", name: "Chicken Parmesan" },
-  { id: "3", name: "Quinoa Salad" },
-]
-
-const dietaryRestrictions = ["Gluten-free", "Lactose intolerant", "No peanuts"]
+import React, { useEffect, useState } from "react";
+import { View, StyleSheet, ScrollView, Text, Image, TouchableOpacity, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as SecureStore from "expo-secure-store";
 
 export default function ProfileScreen() {
+  const [user, setUser] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    avatar?: string;
+    dietaryRestrictions: string[];
+  } | null>(null);
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      const storedUserData = await SecureStore.getItemAsync("userData");
+      if (storedUserData) {
+        setUser(JSON.parse(storedUserData));
+      }
+      setIsLoading(false);
+    };
+
+    loadUserData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.loaderContainer}>
+        <Text>No user data found.</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Image source={{ uri: user.avatar }} style={styles.avatar} />
+          <Image
+            source={{
+              uri: user.avatar || "https://i.pravatar.cc/150?img=68",
+            }}
+            style={styles.avatar}
+          />
           <Text style={styles.welcomeText}>Welcome back, {user.name}!</Text>
         </View>
 
@@ -34,31 +62,23 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Saved Recipes</Text>
-          {savedRecipes.map((recipe) => (
-            <Text key={recipe.id} style={styles.cardContent}>
-              • {recipe.name}
-            </Text>
-          ))}
-          <TouchableOpacity style={styles.button}>
-            <Text style={styles.buttonText}>View All Recipes</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
           <Text style={styles.cardTitle}>Dietary Restrictions</Text>
-          {dietaryRestrictions.map((restriction, index) => (
-            <Text key={index} style={styles.cardContent}>
-              • {restriction}
-            </Text>
-          ))}
+          {user.dietaryRestrictions.length > 0 ? (
+            user.dietaryRestrictions.map((restriction, index) => (
+              <Text key={index} style={styles.cardContent}>
+                • {restriction}
+              </Text>
+            ))
+          ) : (
+            <Text style={styles.cardContent}>No dietary restrictions.</Text>
+          )}
           <TouchableOpacity style={styles.button}>
             <Text style={styles.buttonText}>Edit Restrictions</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -116,5 +136,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-})
-
+  loaderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
