@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, FlatList, StyleSheet, Image, ActivityIndicator } from "react-native";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase.js"; // Import your Firebase config
 
 // Define the Ingredient and Recipe types
@@ -30,10 +30,10 @@ export default function RecipesScreen() {
   const [loading, setLoading] = useState(true); // Loading state for fetching
 
   useEffect(() => {
-    const fetchRecipes = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "recipes"));
-        const fetchedRecipes = querySnapshot.docs.map((doc) => {
+    const unsubscribe = onSnapshot(
+      collection(db, "recipes"),
+      (snapshot) => {
+        const updatedRecipes = snapshot.docs.map((doc) => {
           const data = doc.data();
 
           return {
@@ -67,15 +67,15 @@ export default function RecipesScreen() {
           };
         }) as Recipe[]; // Explicitly cast to Recipe[]
 
-        setRecipes(fetchedRecipes); // Update the state
-      } catch (error) {
+        setRecipes(updatedRecipes); // Update the state
+        setLoading(false);
+      },
+      (error) => {
         console.error("Error fetching recipes: ", error.message, error);
-      } finally {
-        setLoading(false); // Stop the loading spinner
       }
-    };
+    );
 
-    fetchRecipes();
+    return () => unsubscribe();
   }, []);
 
   if (loading) {
