@@ -38,9 +38,8 @@ export default function OnboardingScreen() {
     );
   };
 
-  const handleSubmit = async () => {
+  const handleOnboarding = async () => {
     try {
-      // Create a new user profile in Firestore
       const userData = {
         name,
         email,
@@ -48,18 +47,18 @@ export default function OnboardingScreen() {
         dietary_restr: selectedRestrictions.join(", "),
       };
 
-      // Save to the Firestore "users" collection with email as document ID
+      // Save to Firestore with email as the document ID
       await setDoc(doc(db, "users", email), userData);
 
       // Save the email to SecureStore for later use
       await SecureStore.setItemAsync("userEmail", email);
 
-      console.log("User successfully added!");
+      console.log("User successfully onboarded!");
 
       // Navigate to the main app
       router.replace("/(tabs)/scan");
     } catch (error) {
-      console.error("Error creating user profile:", error);
+      console.error("Error during onboarding:", error);
     }
   };
 
@@ -128,8 +127,17 @@ export default function OnboardingScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+        {/* Get Started Button */}
+        <TouchableOpacity style={styles.submitButton} onPress={handleOnboarding}>
           <Text style={styles.submitButtonText}>Get Started</Text>
+        </TouchableOpacity>
+
+        {/* Log In Button */}
+        <TouchableOpacity
+          style={styles.loginButton}
+          onPress={() => router.push("/login")}
+        >
+          <Text style={styles.loginButtonText}>Already have an account? Log In</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -202,6 +210,18 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: "white",
     fontSize: 18,
+    fontWeight: "bold",
+  },
+  loginButton: {
+    backgroundColor: "#34c759",
+    paddingVertical: 15,
+    borderRadius: 5,
+    alignItems: "center",
+    marginTop: 20,
+  },
+  loginButtonText: {
+    color: "white",
+    fontSize: 16,
     fontWeight: "bold",
   },
 });
