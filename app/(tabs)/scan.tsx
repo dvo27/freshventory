@@ -1,6 +1,15 @@
+import React, { useRef, useState } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Image,
+  Alert,
+} from "react-native";
 import { CameraView, CameraType } from "expo-camera";
-import { useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TouchableOpacity, View, Image } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 
 export default function Scan() {
@@ -26,10 +35,28 @@ export default function Scan() {
     }
   }
 
+  // Select a photo from the gallery
+  async function pickPhoto() {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 1,
+      });
+
+      if (!result.canceled) {
+        setPhoto(result.assets[0].uri); // Store the URI of the selected photo
+      }
+    } catch (error) {
+      console.error("Error selecting photo from gallery:", error);
+      Alert.alert("Error", "Could not access your photo gallery.");
+    }
+  }
+
   return (
     <View style={styles.container}>
       {photo ? (
-        // Display the captured photo
+        // Display the captured or selected photo
         <>
           <Image source={{ uri: photo }} style={styles.preview} />
           <View style={styles.buttonContainer}>
@@ -53,6 +80,9 @@ export default function Scan() {
             </Pressable>
             <Pressable style={styles.button} onPress={takePic}>
               <Text style={styles.text}>Take Picture</Text>
+            </Pressable>
+            <Pressable style={styles.button} onPress={pickPhoto}>
+              <Text style={styles.text}>Upload Photo</Text>
             </Pressable>
           </View>
         </CameraView>
@@ -85,7 +115,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   text: {
-    fontSize: 25,
+    fontSize: 20,
     color: "black",
     textAlign: "center",
     fontWeight: "bold",
@@ -103,7 +133,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   retakeText: {
-    fontSize: 25,
+    fontSize: 20,
     color: "black",
     fontWeight: "bold",
     textAlign: "center",

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,34 +9,88 @@ import {
   Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import axios from "axios";
+import * as FileSystem from "expo-file-system";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 export default function ScannedResult() {
   const { photo } = useLocalSearchParams(); // Access photo URI from the route params
   const router = useRouter(); // Use router for navigation
+  const [scannedItems, setScannedItems] = useState<string[]>([]); // Store the scanned items
+  const [isProcessing, setIsProcessing] = useState(false); // Track if processing is in progress
 
-  // Mock scanned items list for demonstration
-  const scannedItems = [
-    { id: "1", name: "Udon" },
-    { id: "2", name: "Ramen" },
-    { id: "3", name: "Kimchi" },
-  ];
+  const apiUrl = "https://detect.roboflow.com/aicook-lcv4d/3"; // Replace with the actual API URL
+  const apiKey = "fAwcjwOeWTzCAttEENEQ"; // Replace with your actual API key
 
-  // Handle Complete Scan: Add items to the database
+// Handle the API call to process the image
+/// Handle the API call to process the image
+async function processImage(photoUri: string) {
+  setIsProcessing(true);
+  try {
+    // Convert the image to Base64
+    const base64Image = await FileSystem.readAsStringAsync(photoUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Make the API call
+    const response = await axios.post(
+      apiUrl,
+      base64Image,
+      {
+        params: {
+          api_key: apiKey,
+        },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+
+    // Extract only the "class" values with confidence > 0.7
+    const ingredients = response.data.predictions
+      .filter((item: any) => item.confidence > 0.7) // Filter by confidence
+      .map((item: any) => item.class); // Extract the "class" property
+
+    // Remove duplicates from the array
+    const uniqueIngredients = [...new Set(ingredients)];
+
+    console.log("Extracted ingredients:", uniqueIngredients);
+
+    // Save the ingredients to Firebase
+    for (const ingredient of uniqueIngredients) {
+      await addDoc(collection(db, "ingredients"), { name: ingredient });
+    }
+
+    setScannedItems(uniqueIngredients); // Update the scanned items state
+    Alert.alert("Success", "Ingredients have been saved to your inventory!");
+  } catch (error) {
+    console.error("Error processing image:", error);
+    Alert.alert("Error", "Failed to process the image. Please try again.");
+  } finally {
+    setIsProcessing(false);
+  }
+}
+
+
+
+  // Handle Complete Scan
   const handleCompleteScan = async () => {
     try {
-      for (const item of scannedItems) {
-        await addDoc(collection(db, "ingredients"), { name: item.name }); // Add each item to Firestore
-      }
-
       Alert.alert("Success", "Scanned ingredients have been added to your inventory!");
       router.replace("/scan"); // Navigate back to the scan page
     } catch (error) {
       console.error("Error adding items to inventory:", error);
-      Alert.alert("Error", "Failed to add scanned items to the inventory.");
+      Alert.alert("Error", "Failed to complete the scan.");
     }
   };
+
+  // Trigger processing when the component loads
+  React.useEffect(() => {
+    if (photo) {
+      processImage(photo as string);
+    }
+  }, [photo]);
 
   return (
     <View style={styles.container}>
@@ -55,10 +109,13 @@ export default function ScannedResult() {
         <Text style={styles.title}>Detected Items</Text>
         <FlatList
           data={scannedItems}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item}-${index}`}
           renderItem={({ item }) => (
-            <Text style={styles.itemText}>• {item.name}</Text>
+            <Text style={styles.itemText}>• {item}</Text>
           )}
+          ListEmptyComponent={
+            !isProcessing && <Text style={styles.placeholder}>No items detected.</Text>
+          }
         />
 
         {/* Action Buttons */}
@@ -113,6 +170,8 @@ const styles = StyleSheet.create({
   placeholder: {
     fontSize: 16,
     color: "#aaa",
+    textAlign: "center",
+    marginTop: 20,
   },
   itemText: {
     fontSize: 18,
