@@ -21,6 +21,12 @@ export default function OnboardingScreen() {
   const [selectedRestrictions, setSelectedRestrictions] = useState<string[]>([])
   const router = useRouter()
 
+  const completeOnboarding = async () => {
+    await SecureStore.setItemAsync("hasOnboarded", "true");
+    router.replace("/"); // Redirect to the main app
+  };
+
+
   const toggleRestriction = (restriction: string) => {
     setSelectedRestrictions((prev) =>
       prev.includes(restriction) ? prev.filter((r) => r !== restriction) : [...prev, restriction],
@@ -28,6 +34,7 @@ export default function OnboardingScreen() {
   }
 
   const handleSubmit = async () => {
+    // IMPLEMENT ACTUAL SECURESTORE LOGIC TO SAVE TO DB
     // Save user data
     const userData = { name, email, phone, dietaryRestrictions: selectedRestrictions }
     await SecureStore.setItemAsync("userData", JSON.stringify(userData))
@@ -36,7 +43,7 @@ export default function OnboardingScreen() {
     await SecureStore.setItemAsync("onboardingCompleted", "true")
 
     // Navigate to the main app
-    router.replace("/")
+    router.replace("/(tabs)/scan")
   }
 
   return (

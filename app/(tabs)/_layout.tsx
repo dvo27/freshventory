@@ -7,33 +7,6 @@ import * as SecureStore from "expo-secure-store"
 import { View, ActivityIndicator } from "react-native"
 
 export default function TabLayout() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasOnboarded, setHasOnboarded] = useState(false);
-
-  useEffect(() => {
-    const checkOnboarding = async () => {
-      const onboarded = await SecureStore.getItemAsync("hasOnboarded");
-      setHasOnboarded(onboarded === "true");
-      setIsLoading(false);
-    };
-
-    checkOnboarding();
-  }, []);
-
-  if (isLoading) {
-    // Show a loading indicator while checking the onboarding status
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
-  if (!hasOnboarded) {
-    // If the user hasn't completed onboarding, render the onboarding screen
-    return <Redirect href="/oboarding" />;
-  }
-
   return (
     <Tabs screenOptions={{ tabBarActiveTintColor: "blue" }}>
       <Tabs.Screen
@@ -44,7 +17,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="scan"
         options={{
           title: "Scan",
           tabBarIcon: ({ color }) => <FontAwesome size={28} name="camera" color={color} />,
