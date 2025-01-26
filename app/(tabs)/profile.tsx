@@ -1,7 +1,27 @@
 import React, { useEffect, useState } from "react";
-import { View, StyleSheet, ScrollView, Text, Image, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  Text,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  Modal,
+  FlatList,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as SecureStore from "expo-secure-store";
+
+const dietaryRestrictions = [
+  "None",
+  "Vegetarian",
+  "Vegan",
+  "Gluten-free",
+  "Lactose-free",
+  "Nut allergy",
+  "Shellfish allergy",
+];
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<{
@@ -13,18 +33,43 @@ export default function ProfileScreen() {
   } | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [selectedRestrictions, setSelectedRestrictions] = useState<string[]>([]);
 
   useEffect(() => {
     const loadUserData = async () => {
       const storedUserData = await SecureStore.getItemAsync("userData");
       if (storedUserData) {
-        setUser(JSON.parse(storedUserData));
+        const parsedUserData = JSON.parse(storedUserData);
+        setUser(parsedUserData);
+        setSelectedRestrictions(parsedUserData.dietaryRestrictions || []);
       }
       setIsLoading(false);
     };
 
     loadUserData();
   }, []);
+
+  const saveDietaryRestrictions = async () => {
+    if (user) {
+      const updatedUser = {
+        ...user,
+        dietaryRestrictions: selectedRestrictions,
+      };
+
+      await SecureStore.setItemAsync("userData", JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      setIsEditModalVisible(false);
+    }
+  };
+
+  const toggleRestriction = (restriction: string) => {
+    setSelectedRestrictions((prev) =>
+      prev.includes(restriction)
+        ? prev.filter((item) => item !== restriction)
+        : [...prev, restriction]
+    );
+  };
 
   if (isLoading) {
     return (
@@ -48,19 +93,21 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <Image
             source={{
-              uri: user.avatar || "https://i.pravatar.cc/150?img=68",
+              uri: user.avatar || "https://a.espncdn.com/i/headshots/nba/players/full/1966.png",
             }}
             style={styles.avatar}
           />
           <Text style={styles.welcomeText}>Welcome back, {user.name}!</Text>
         </View>
 
+        {/* Personal Information Section */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Personal Information</Text>
           <Text style={styles.cardContent}>Email: {user.email}</Text>
           <Text style={styles.cardContent}>Phone: {user.phone}</Text>
         </View>
 
+        {/* Dietary Restrictions Section */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Dietary Restrictions</Text>
           {user.dietaryRestrictions.length > 0 ? (
@@ -72,11 +119,67 @@ export default function ProfileScreen() {
           ) : (
             <Text style={styles.cardContent}>No dietary restrictions.</Text>
           )}
-          <TouchableOpacity style={styles.button}>
+
+          {/* Edit Restrictions Button */}
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => setIsEditModalVisible(true)}
+          >
             <Text style={styles.buttonText}>Edit Restrictions</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Edit Restrictions Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isEditModalVisible}
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Dietary Restrictions</Text>
+            <FlatList
+              data={dietaryRestrictions}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.restrictionItem,
+                    selectedRestrictions.includes(item) && styles.selectedRestriction,
+                  ]}
+                  onPress={() => toggleRestriction(item)}
+                >
+                  <Text
+                    style={[
+                      styles.restrictionText,
+                      selectedRestrictions.includes(item) && styles.selectedRestrictionText,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIsEditModalVisible(false)}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={saveDietaryRestrictions}
+              >
+                <Text style={styles.buttonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -139,6 +242,59 @@ const styles = StyleSheet.create({
   loaderContainer: {
     flex: 1,
     justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  modalContent: {
+    backgroundColor: "white",
+    borderRadius: 8,
+    padding: 20,
+    width: "80%",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 16,
+  },
+  restrictionItem: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: "#f0f0f0",
+  },
+  selectedRestriction: {
+    backgroundColor: "#007AFF",
+  },
+  restrictionText: {
+    fontSize: 16,
+  },
+  selectedRestrictionText: {
+    color: "white",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginTop: 16,
+  },
+  cancelButton: {
+    backgroundColor: "#ff3b30",
+    padding: 10,
+    borderRadius: 4,
+    width: "45%",
+    alignItems: "center",
+  },
+  saveButton: {
+    backgroundColor: "#34c759",
+    padding: 10,
+    borderRadius: 4,
+    width: "45%",
     alignItems: "center",
   },
 });
