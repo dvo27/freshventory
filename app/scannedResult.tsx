@@ -11,79 +11,76 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import axios from "axios";
 import * as FileSystem from "expo-file-system";
-import { collection, addDoc } from "firebase/firestore";
+import { query, where, collection, getDocs, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 export default function ScannedResult() {
   const { photo } = useLocalSearchParams(); // Access photo URI from the route params
   const router = useRouter(); // Use router for navigation
-  const [scannedItems, setScannedItems] = useState<string[]>([]); // Store the scanned items
+  const [scannedItems, setScannedItems] = useState<string[]>([]); // Store the detected items
+  const [alreadyExistingItems, setAlreadyExistingItems] = useState<string[]>([]); // Store the already existing items
   const [isProcessing, setIsProcessing] = useState(false); // Track if processing is in progress
 
   const apiUrl = "https://detect.roboflow.com/aicook-lcv4d/3"; // Replace with the actual API URL
   const apiKey = "fAwcjwOeWTzCAttEENEQ"; // Replace with your actual API key
 
-// Handle the API call to process the image
-/// Handle the API call to process the image
-async function processImage(photoUri: string) {
-  setIsProcessing(true);
-  try {
-    // Convert the image to Base64
-    const base64Image = await FileSystem.readAsStringAsync(photoUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Make the API call
-    const response = await axios.post(
-      apiUrl,
-      base64Image,
-      {
-        params: {
-          api_key: apiKey,
-        },
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
-    );
-
-    // Extract only the "class" values with confidence > 0.7
-    const ingredients = response.data.predictions
-      .filter((item: any) => item.confidence > 0.7) // Filter by confidence
-      .map((item: any) => item.class); // Extract the "class" property
-
-    // Remove duplicates from the array
-    const uniqueIngredients = [...new Set(ingredients)];
-
-    console.log("Extracted ingredients:", uniqueIngredients);
-
-    // Save the ingredients to Firebase
-    for (const ingredient of uniqueIngredients) {
-      await addDoc(collection(db, "ingredients"), { name: ingredient });
-    }
-
-    setScannedItems(uniqueIngredients); // Update the scanned items state
-    Alert.alert("Success", "Ingredients have been saved to your inventory!");
-  } catch (error) {
-    console.error("Error processing image:", error);
-    Alert.alert("Error", "Failed to process the image. Please try again.");
-  } finally {
-    setIsProcessing(false);
-  }
-}
-
-
-
-  // Handle Complete Scan
-  const handleCompleteScan = async () => {
+  // Handle the API call to process the image
+  async function processImage(photoUri: string) {
     try {
-      Alert.alert("Success", "Scanned ingredients have been added to your inventory!");
-      router.replace("/scan"); // Navigate back to the scan page
+      setIsProcessing(true);
+
+      // Convert the image to Base64
+      const base64Image = await FileSystem.readAsStringAsync(photoUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Make the API call
+      const response = await axios.post(
+        apiUrl,
+        base64Image,
+        {
+          params: { api_key: apiKey },
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      );
+
+      // Get the predictions from the API response
+      const predictions = response.data.predictions;
+
+      const ingredientsToAdd = new Set<string>();
+      const existingItems = [];
+
+      for (const item of predictions) {
+        if (item.confidence > 0.7) {
+          const ingredientQuery = query(
+            collection(db, "ingredients"),
+            where("name", "==", item.class)
+          );
+          const querySnapshot = await getDocs(ingredientQuery);
+
+          if (querySnapshot.empty) {
+            // Use Set to ensure uniqueness
+            ingredientsToAdd.add(item.class);
+          } else {
+            existingItems.push(item.class);
+          }
+        }
+      }
+
+      setScannedItems(Array.from(ingredientsToAdd)); // Convert Set to Array
+      setAlreadyExistingItems(existingItems);
+
+      Alert.alert(
+        "Scan Complete",
+        "Review the detected items and press 'Complete Scan' to save them."
+      );
     } catch (error) {
-      console.error("Error adding items to inventory:", error);
-      Alert.alert("Error", "Failed to complete the scan.");
+      console.error("Error processing image:", error);
+      Alert.alert("Error", "Failed to process the image. Please try again.");
+    } finally {
+      setIsProcessing(false);
     }
-  };
+  }
 
   // Trigger processing when the component loads
   React.useEffect(() => {
@@ -91,6 +88,33 @@ async function processImage(photoUri: string) {
       processImage(photo as string);
     }
   }, [photo]);
+
+  // Handle Complete Scan
+  const handleCompleteScan = async () => {
+    try {
+      // Add only the items listed in `scannedItems` to the database
+      for (const ingredient of scannedItems) {
+        await addDoc(collection(db, "ingredients"), { name: ingredient });
+      }
+
+      Alert.alert(
+        "Success",
+        `Ingredients added to inventory: ${scannedItems.join(", ")}`
+      );
+
+      // Navigate back to the scan page
+      router.replace("/scan");
+    } catch (error) {
+      console.error("Error completing the scan:", error);
+      Alert.alert("Error", "Failed to complete the scan. Please try again.");
+    }
+  };
+
+  // Delete a detected item from the list
+  const deleteItem = (item: string) => {
+    setScannedItems((prevItems) => prevItems.filter((i) => i !== item));
+    Alert.alert("Item Deleted", `${item} has been removed from the list.`);
+  };
 
   return (
     <View style={styles.container}>
@@ -111,12 +135,34 @@ async function processImage(photoUri: string) {
           data={scannedItems}
           keyExtractor={(item, index) => `${item}-${index}`}
           renderItem={({ item }) => (
-            <Text style={styles.itemText}>• {item}</Text>
+            <View style={styles.itemContainer}>
+              <Text style={styles.itemText}>• {item}</Text>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => deleteItem(item)}
+              >
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           )}
           ListEmptyComponent={
             !isProcessing && <Text style={styles.placeholder}>No items detected.</Text>
           }
         />
+
+        {/* Show items that already exist */}
+        {alreadyExistingItems.length > 0 && (
+          <View style={styles.infoContainer}>
+            <Text style={styles.infoTitle}>Already in Inventory</Text>
+            <FlatList
+              data={alreadyExistingItems}
+              keyExtractor={(item, index) => `${item}-${index}`}
+              renderItem={({ item }) => (
+                <Text style={styles.infoText}>• {item}</Text>
+              )}
+            />
+          </View>
+        )}
 
         {/* Action Buttons */}
         <View style={styles.buttonContainer}>
@@ -173,9 +219,26 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 20,
   },
+  itemContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   itemText: {
     fontSize: 18,
     marginVertical: 4,
+  },
+  deleteButton: {
+    backgroundColor: "#ff3b30",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
+  },
+  deleteButtonText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "bold",
   },
   buttonContainer: {
     flexDirection: "row",
@@ -197,5 +260,18 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  infoContainer: {
+    marginTop: 16,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 8,
+    color: "#888",
+  },
+  infoText: {
+    fontSize: 14,
+    color: "#666",
   },
 });
