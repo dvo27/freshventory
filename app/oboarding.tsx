@@ -6,10 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { collection, setDoc, doc } from "firebase/firestore";
+import { setDoc, doc } from "firebase/firestore";
 import { db } from "../firebase.js";
 import * as SecureStore from "expo-secure-store";
 
@@ -28,6 +29,18 @@ export default function OnboardingScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [selectedRestrictions, setSelectedRestrictions] = useState<string[]>([]);
+  const [errors, setErrors] = useState<{
+    name: boolean;
+    email: boolean;
+    phone: boolean;
+    emailMessage?: string;
+  }>({
+    name: false,
+    email: false,
+    phone: false,
+    emailMessage: "",
+  });
+
   const router = useRouter();
 
   const toggleRestriction = (restriction: string) => {
@@ -39,26 +52,46 @@ export default function OnboardingScreen() {
   };
 
   const handleOnboarding = async () => {
-    try {
-      const userData = {
-        name,
-        email,
-        phone_num: phone,
-        dietary_restr: selectedRestrictions.join(", "),
-      };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-      // Save to Firestore with email as the document ID
-      await setDoc(doc(db, "users", email), userData);
+    const newErrors = {
+      name: name.trim() === "",
+      email: email.trim() === "" || !emailRegex.test(email),
+      phone: phone.trim() === "",
+      emailMessage:
+        email.trim() === ""
+          ? "Email is required"
+          : !emailRegex.test(email)
+          ? "Please enter a valid email address"
+          : "",
+    };
 
-      // Save the email to SecureStore for later use
-      await SecureStore.setItemAsync("userEmail", email);
+    setErrors(newErrors);
 
-      console.log("User successfully onboarded!");
+    if (!newErrors.name && !newErrors.email && !newErrors.phone) {
+      try {
+        const userData = {
+          name,
+          email,
+          phone_num: phone,
+          dietary_restr: selectedRestrictions.join(", "),
+        };
 
-      // Navigate to the main app
-      router.replace("/(tabs)/scan");
-    } catch (error) {
-      console.error("Error during onboarding:", error);
+        // Save to Firestore with email as the document ID
+        await setDoc(doc(db, "users", email), userData);
+
+        // Save the email to SecureStore for later use
+        await SecureStore.setItemAsync("userEmail", email);
+
+        console.log("User successfully onboarded!");
+
+        // Navigate to the main app
+        router.replace("/(tabs)/scan");
+      } catch (error) {
+        console.error("Error during onboarding:", error);
+      }
+    } else {
+      Alert.alert("Error", "Please correct the highlighted fields.");
     }
   };
 
@@ -68,38 +101,55 @@ export default function OnboardingScreen() {
         <Text style={styles.title}>Welcome to FreshVentory</Text>
         <Text style={styles.subtitle}>Let's get to know you</Text>
 
+        {/* Name Input */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Name</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, errors.name && styles.inputError]}
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => {
+              setName(text);
+              if (errors.name) setErrors((prev) => ({ ...prev, name: false }));
+            }}
             placeholder="Enter your name"
           />
+          {errors.name && <Text style={styles.errorText}>Name is required</Text>}
         </View>
 
+        {/* Email Input */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, errors.email && styles.inputError]}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (errors.email)
+                setErrors((prev) => ({ ...prev, email: false, emailMessage: "" }));
+            }}
             placeholder="Enter your email"
             keyboardType="email-address"
           />
+          {errors.email && <Text style={styles.errorText}>{errors.emailMessage}</Text>}
         </View>
 
+        {/* Phone Input */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Phone</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, errors.phone && styles.inputError]}
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(text) => {
+              setPhone(text);
+              if (errors.phone) setErrors((prev) => ({ ...prev, phone: false }));
+            }}
             placeholder="Enter your phone number"
             keyboardType="phone-pad"
           />
+          {errors.phone && <Text style={styles.errorText}>Phone number is required</Text>}
         </View>
 
+        {/* Dietary Restrictions */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Dietary Restrictions</Text>
           <View style={styles.restrictionsContainer}>
@@ -108,8 +158,7 @@ export default function OnboardingScreen() {
                 key={restriction}
                 style={[
                   styles.restrictionButton,
-                  selectedRestrictions.includes(restriction) &&
-                    styles.selectedRestriction,
+                  selectedRestrictions.includes(restriction) && styles.selectedRestriction,
                 ]}
                 onPress={() => toggleRestriction(restriction)}
               >
@@ -178,6 +227,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 5,
     fontSize: 16,
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: "red",
+  },
+  errorText: {
+    color: "red",
+    fontSize: 14,
+    marginTop: 5,
   },
   restrictionsContainer: {
     flexDirection: "row",
