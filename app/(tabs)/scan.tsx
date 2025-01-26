@@ -1,11 +1,13 @@
 import { CameraView, CameraType } from "expo-camera";
 import { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TouchableOpacity, View, Image } from "react-native";
+import { useRouter } from "expo-router";
 
 export default function Scan() {
   const [facing, setFacing] = useState<CameraType>("back");
   const cameraRef = useRef(null); // Reference to the CameraView
   const [photo, setPhoto] = useState<string | null>(null); // Store captured photo URI
+  const router = useRouter();
 
   // Toggle between front and back cameras
   function toggleCameraFacing() {
@@ -34,7 +36,10 @@ export default function Scan() {
             <Pressable style={styles.retakeButton} onPress={() => setPhoto(null)}>
               <Text style={styles.retakeText}>Retake Photo</Text>
             </Pressable>
-            <Pressable style={styles.retakeButton} onPress={() => setPhoto(null)}>
+            <Pressable
+              style={styles.retakeButton}
+              onPress={() => router.push({ pathname: "../scannedResult", params: { photo } })}
+            >
               <Text style={styles.retakeText}>Start Scan</Text>
             </Pressable>
           </View>
@@ -60,18 +65,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
-    alignItems: "center", // Center content horizontally
+    alignItems: "center",
     backgroundColor: "#fff",
   },
   camera: {
     flex: 1,
-    width: "100%", // Make camera preview full width
+    width: "100%",
   },
   buttonContainer: {
     flexDirection: "row",
     justifyContent: "space-evenly",
     position: "absolute",
-    bottom: 20, // Position buttons at the bottom of the screen
+    bottom: 20,
     width: "100%",
   },
   button: {
@@ -83,7 +88,7 @@ const styles = StyleSheet.create({
     fontSize: 25,
     color: "black",
     textAlign: "center",
-    fontWeight: "bold"
+    fontWeight: "bold",
   },
   preview: {
     flex: 1,
@@ -94,8 +99,8 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     padding: 15,
     borderRadius: 5,
-    marginTop: 20, // Add space between the photo and the button
-    alignSelf: "center", // Center the button horizontally
+    marginTop: 20,
+    alignSelf: "center",
   },
   retakeText: {
     fontSize: 25,
