@@ -55,5 +55,16 @@
     "react-test-renderer": "18.3.1",
     "typescript": "^5.3.3"
   },
-  "private": true
+  "private": true,
+  "description": "fridge inventory tracker and scanner while giving users recipes with items in their fridge",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dvo27/freshventory.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dvo27/freshventory/issues"
+  },
+  "homepage": "https://github.com/dvo27/freshventory#readme"
 }
